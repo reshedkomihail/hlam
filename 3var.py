@@ -1,4 +1,5 @@
 import sys
+import os
 import mysql.connector
 from mysql.connector import Error
 from datetime import datetime
@@ -6,20 +7,21 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTableWidget, QTableWidgetItem, QPushButton, QLabel, QLineEdit,
     QDialog, QFormLayout, QDateEdit, QComboBox, QMessageBox,
-    QGroupBox, QHeaderView, QTabWidget, QTextEdit, QSpinBox
+    QGroupBox, QHeaderView, QTabWidget
 )
 from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QIcon, QFont, QColor
+from PySide6.QtGui import QColor
 
 
 class Database:
     """Класс для работы с MySQL базой данных"""
     
-    def __init__(self, host="localhost", user="root", password="", database="hr_database"):
-        self.host = host
-        self.user = user
-        self.password = password
-        self.database = database
+    def __init__(self):
+        # Параметры подключения из переменных окружения или значения по умолчанию
+        self.host = os.getenv('MYSQL_HOST', '127.0.0.1')
+        self.user = os.getenv('MYSQL_USER', 'root')
+        self.password = os.getenv('MYSQL_PASSWORD', '12345')
+        self.database = os.getenv('MYSQL_DATABASE', 'hr')
         self.connection = None
         self.connect()
         self.create_database_if_not_exists()
@@ -35,12 +37,7 @@ class Database:
                 password=self.password
             )
         except Error as e:
-            QMessageBox.critical(None, "Ошибка подключения", 
-                               f"Не удалось подключиться к MySQL:\n{str(e)}\n\n"
-                               f"Убедитесь, что MySQL сервер запущен.\n"
-                               f"Параметры подключения:\n"
-                               f"Хост: {self.host}\n"
-                               f"Пользователь: {self.user}")
+            print(f"Ошибка подключения: {e}")
             sys.exit(1)
     
     def create_database_if_not_exists(self):
@@ -51,7 +48,7 @@ class Database:
             cursor.execute(f"USE {self.database}")
             self.connection.database = self.database
         except Error as e:
-            QMessageBox.critical(None, "Ошибка", f"Не удалось создать базу данных:\n{str(e)}")
+            print(f"Ошибка создания БД: {e}")
             sys.exit(1)
         finally:
             cursor.close()
@@ -76,7 +73,6 @@ class Database:
                     hire_date DATE,
                     salary DECIMAL(10, 2),
                     status ENUM('active', 'on_vacation', 'sick_leave', 'fired') DEFAULT 'active',
-                    photo_path VARCHAR(500),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
@@ -88,18 +84,7 @@ class Database:
                     id INT PRIMARY KEY AUTO_INCREMENT,
                     name VARCHAR(100) NOT NULL UNIQUE,
                     description TEXT,
-                    head_id INT,
-                    FOREIGN KEY (head_id) REFERENCES employees(id) ON DELETE SET NULL
-                ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-            ''')
-            
-            # Таблица должностей
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS positions (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    name VARCHAR(100) NOT NULL UNIQUE,
-                    base_salary DECIMAL(10, 2),
-                    requirements TEXT
+                    head_id INT
                 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             ''')
             
@@ -111,7 +96,7 @@ class Database:
                     start_date DATE NOT NULL,
                     end_date DATE NOT NULL,
                     type VARCHAR(50),
-                    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+                    status ENUM('pending', 'approved', 'rejected') DEFAULT 'approved',
                     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
                 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             ''')
@@ -119,13 +104,13 @@ class Database:
             self.connection.commit()
             
         except Error as e:
-            QMessageBox.critical(None, "Ошибка", f"Не удалось создать таблицы:\n{str(e)}")
+            print(f"Ошибка создания таблиц: {e}")
             sys.exit(1)
         finally:
             cursor.close()
     
     def add_test_data(self):
-        """Добавление тестовых данных, если таблица пуста"""
+        """Добавление тестовых данных"""
         cursor = self.connection.cursor()
         
         try:
@@ -133,7 +118,6 @@ class Database:
             count = cursor.fetchone()[0]
             
             if count == 0:
-                # Добавляем тестовых сотрудников
                 test_employees = [
                     ("Иванов", "Иван", "Иванович", "1990-05-15", "Разработчик", "IT-отдел", 
                      "+7 (999) 123-45-67", "ivanov@company.ru", "2020-01-10", 50000, "active"),
@@ -155,7 +139,6 @@ class Database:
                         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ''', emp)
                 
-                # Добавляем отделы
                 departments = [
                     ("IT-отдел", "Информационные технологии", 1),
                     ("Отдел кадров", "Управление персоналом", 2),
@@ -172,7 +155,7 @@ class Database:
                 self.connection.commit()
                 
         except Error as e:
-            print(f"Ошибка при добавлении тестовых данных: {e}")
+            print(f"Ошибка добавления данных: {e}")
             self.connection.rollback()
         finally:
             cursor.close()
@@ -188,36 +171,28 @@ class Database:
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', data)
             self.connection.commit()
-            employee_id = cursor.lastrowid
-            return employee_id
+            return cursor.lastrowid
         except Error as e:
             self.connection.rollback()
             raise e
         finally:
             cursor.close()
     
-    def get_employees(self, filters=None):
-        """Получение списка сотрудников с возможностью фильтрации"""
+    def get_employees(self, search=None):
+        """Получение списка сотрудников"""
         cursor = self.connection.cursor()
         
-        query = "SELECT * FROM employees WHERE 1=1"
-        params = []
+        if search:
+            query = """
+                SELECT * FROM employees 
+                WHERE last_name LIKE %s OR first_name LIKE %s OR position LIKE %s
+                ORDER BY last_name, first_name
+            """
+            search_term = f"%{search}%"
+            cursor.execute(query, (search_term, search_term, search_term))
+        else:
+            cursor.execute("SELECT * FROM employees ORDER BY last_name, first_name")
         
-        if filters:
-            if filters.get('department'):
-                query += " AND department = %s"
-                params.append(filters['department'])
-            if filters.get('status'):
-                query += " AND status = %s"
-                params.append(filters['status'])
-            if filters.get('search'):
-                query += " AND (last_name LIKE %s OR first_name LIKE %s OR position LIKE %s)"
-                search_term = f"%{filters['search']}%"
-                params.extend([search_term, search_term, search_term])
-        
-        query += " ORDER BY last_name, first_name"
-        
-        cursor.execute(query, params)
         employees = cursor.fetchall()
         cursor.close()
         return employees
@@ -263,26 +238,10 @@ class Database:
     def get_departments(self):
         """Получение списка отделов"""
         cursor = self.connection.cursor()
-        cursor.execute("SELECT * FROM departments ORDER BY name")
-        departments = cursor.fetchall()
+        cursor.execute("SELECT name FROM departments ORDER BY name")
+        departments = [row[0] for row in cursor.fetchall()]
         cursor.close()
         return departments
-    
-    def add_department(self, name, description=""):
-        """Добавление нового отдела"""
-        cursor = self.connection.cursor()
-        try:
-            cursor.execute(
-                "INSERT INTO departments (name, description) VALUES (%s, %s)",
-                (name, description)
-            )
-            self.connection.commit()
-            return True
-        except Error:
-            self.connection.rollback()
-            return False
-        finally:
-            cursor.close()
     
     def add_vacation(self, employee_id, start_date, end_date, vacation_type):
         """Добавление отпуска"""
@@ -292,6 +251,12 @@ class Database:
                 INSERT INTO vacations (employee_id, start_date, end_date, type, status)
                 VALUES (%s, %s, %s, %s, 'approved')
             ''', (employee_id, start_date, end_date, vacation_type))
+            self.connection.commit()
+            
+            # Обновляем статус сотрудника
+            cursor.execute('''
+                UPDATE employees SET status = 'on_vacation' WHERE id = %s
+            ''', (employee_id,))
             self.connection.commit()
         except Error as e:
             self.connection.rollback()
@@ -312,12 +277,10 @@ class Database:
         return vacations
     
     def get_statistics(self):
-        """Получение статистики по сотрудникам"""
+        """Получение статистики"""
         cursor = self.connection.cursor()
-        
         stats = {}
         
-        # Общая статистика
         cursor.execute("SELECT COUNT(*) FROM employees")
         stats['total'] = cursor.fetchone()[0]
         
@@ -337,106 +300,9 @@ class Database:
         return stats
     
     def close(self):
-        """Закрытие соединения с БД"""
+        """Закрытие соединения"""
         if self.connection and self.connection.is_connected():
             self.connection.close()
-
-
-class ConnectionDialog(QDialog):
-    """Диалог настроек подключения к MySQL"""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Настройки подключения к MySQL")
-        self.setModal(True)
-        self.setFixedSize(450, 350)
-        self.init_ui()
-    
-    def init_ui(self):
-        layout = QVBoxLayout()
-        
-        info_label = QLabel("Введите параметры подключения к MySQL серверу:")
-        info_label.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
-        layout.addWidget(info_label)
-        
-        form_layout = QFormLayout()
-        
-        self.host_edit = QLineEdit("localhost")
-        self.host_edit.setPlaceholderText("localhost")
-        
-        self.user_edit = QLineEdit("root")
-        self.user_edit.setPlaceholderText("root")
-        
-        self.password_edit = QLineEdit()
-        self.password_edit.setEchoMode(QLineEdit.Password)
-        self.password_edit.setPlaceholderText("пароль")
-        
-        self.database_edit = QLineEdit("hr_database")
-        self.database_edit.setPlaceholderText("hr_database")
-        
-        form_layout.addRow("Хост:", self.host_edit)
-        form_layout.addRow("Пользователь:", self.user_edit)
-        form_layout.addRow("Пароль:", self.password_edit)
-        form_layout.addRow("База данных:", self.database_edit)
-        
-        layout.addLayout(form_layout)
-        
-        # Кнопки
-        buttons_layout = QHBoxLayout()
-        test_btn = QPushButton("Тест подключения")
-        test_btn.clicked.connect(self.test_connection)
-        save_btn = QPushButton("Подключиться")
-        save_btn.clicked.connect(self.accept)
-        cancel_btn = QPushButton("Отмена")
-        cancel_btn.clicked.connect(self.reject)
-        
-        buttons_layout.addWidget(test_btn)
-        buttons_layout.addWidget(save_btn)
-        buttons_layout.addWidget(cancel_btn)
-        
-        layout.addLayout(buttons_layout)
-        
-        self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #666; margin-top: 10px;")
-        self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
-        
-        # Инструкция
-        help_text = QLabel(
-            "💡 Инструкция:\n"
-            "1. Убедитесь, что MySQL сервер запущен\n"
-            "2. Введите правильные данные для подключения\n"
-            "3. База данных будет создана автоматически"
-        )
-        help_text.setStyleSheet("color: #888; font-size: 10px; margin-top: 10px;")
-        help_text.setWordWrap(True)
-        layout.addWidget(help_text)
-        
-        self.setLayout(layout)
-    
-    def test_connection(self):
-        """Тестирование подключения к MySQL"""
-        try:
-            conn = mysql.connector.connect(
-                host=self.host_edit.text(),
-                user=self.user_edit.text(),
-                password=self.password_edit.text()
-            )
-            conn.close()
-            self.status_label.setText("✓ Подключение успешно!")
-            self.status_label.setStyleSheet("color: green; margin-top: 10px;")
-        except Error as e:
-            self.status_label.setText(f"✗ Ошибка: {str(e)}")
-            self.status_label.setStyleSheet("color: red; margin-top: 10px;")
-    
-    def get_connection_params(self):
-        """Получение параметров подключения"""
-        return {
-            'host': self.host_edit.text(),
-            'user': self.user_edit.text(),
-            'password': self.password_edit.text(),
-            'database': self.database_edit.text()
-        }
 
 
 class EmployeeDialog(QDialog):
@@ -456,8 +322,6 @@ class EmployeeDialog(QDialog):
     
     def init_ui(self):
         layout = QVBoxLayout()
-        
-        # Форма
         form_layout = QFormLayout()
         
         # Личные данные
@@ -471,7 +335,6 @@ class EmployeeDialog(QDialog):
         # Рабочая информация
         self.position_edit = QLineEdit()
         self.department_combo = QComboBox()
-        self.load_departments()
         self.department_combo.setEditable(True)
         
         self.phone_edit = QLineEdit()
@@ -482,19 +345,7 @@ class EmployeeDialog(QDialog):
         
         self.salary_edit = QLineEdit()
         self.status_combo = QComboBox()
-        self.status_combo.addItems(["active", "on_vacation", "sick_leave", "fired"])
-        
-        # Переводы
-        status_labels = {
-            "active": "Активен",
-            "on_vacation": "В отпуске",
-            "sick_leave": "На больничном",
-            "fired": "Уволен"
-        }
-        for i in range(self.status_combo.count()):
-            item_text = self.status_combo.itemText(i)
-            if item_text in status_labels:
-                self.status_combo.setItemText(i, status_labels[item_text])
+        self.status_combo.addItems(["Активен", "В отпуске", "На больничном", "Уволен"])
         
         form_layout.addRow("Фамилия:*", self.last_name_edit)
         form_layout.addRow("Имя:*", self.first_name_edit)
@@ -522,21 +373,21 @@ class EmployeeDialog(QDialog):
         layout.addLayout(buttons_layout)
         
         self.setLayout(layout)
+        self.load_departments()
     
     def load_departments(self):
-        """Загрузка отделов в комбобокс"""
+        """Загрузка отделов"""
         if self.db:
             self.department_combo.clear()
-            departments = self.db.get_departments()
             self.department_combo.addItem("")
-            for dept in departments:
-                self.department_combo.addItem(dept[1])
+            departments = self.db.get_departments()
+            self.department_combo.addItems(departments)
     
     def load_employee_data(self):
-        """Загрузка данных сотрудника для редактирования"""
+        """Загрузка данных сотрудника"""
         if not self.db:
             return
-            
+        
         employee = self.db.get_employee_by_id(self.employee_id)
         if employee:
             self.last_name_edit.setText(employee[1])
@@ -549,7 +400,6 @@ class EmployeeDialog(QDialog):
             
             self.position_edit.setText(employee[5] or "")
             
-            # Выбор отдела
             index = self.department_combo.findText(employee[6] or "")
             if index >= 0:
                 self.department_combo.setCurrentIndex(index)
@@ -563,7 +413,6 @@ class EmployeeDialog(QDialog):
             
             self.salary_edit.setText(str(employee[10]) if employee[10] else "")
             
-            # Статус
             status_map = {
                 "active": "Активен",
                 "on_vacation": "В отпуске",
@@ -578,10 +427,16 @@ class EmployeeDialog(QDialog):
     def save_employee(self):
         """Сохранение сотрудника"""
         if not self.last_name_edit.text() or not self.first_name_edit.text():
-            QMessageBox.warning(self, "Ошибка", "Фамилия и имя обязательны для заполнения!")
+            QMessageBox.warning(self, "Ошибка", "Фамилия и имя обязательны!")
             return
         
-        # Сбор данных
+        status_map = {
+            "Активен": "active",
+            "В отпуске": "on_vacation",
+            "На больничном": "sick_leave",
+            "Уволен": "fired"
+        }
+        
         data = (
             self.last_name_edit.text(),
             self.first_name_edit.text(),
@@ -593,30 +448,19 @@ class EmployeeDialog(QDialog):
             self.email_edit.text() or None,
             self.hire_date.date().toString("yyyy-MM-dd"),
             float(self.salary_edit.text()) if self.salary_edit.text() else None,
-            self.get_status_value()
+            status_map.get(self.status_combo.currentText(), "active")
         )
         
         try:
             if self.employee_id:
                 self.db.update_employee(self.employee_id, data)
-                QMessageBox.information(self, "Успех", "Данные сотрудника обновлены!")
+                QMessageBox.information(self, "Успех", "Данные обновлены!")
             else:
                 self.db.add_employee(data)
                 QMessageBox.information(self, "Успех", "Сотрудник добавлен!")
-            
             self.accept()
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить данные:\n{str(e)}")
-    
-    def get_status_value(self):
-        """Получение значения статуса для БД"""
-        status_map = {
-            "Активен": "active",
-            "В отпуске": "on_vacation",
-            "На больничном": "sick_leave",
-            "Уволен": "fired"
-        }
-        return status_map.get(self.status_combo.currentText(), "active")
+            QMessageBox.critical(self, "Ошибка", f"Ошибка: {str(e)}")
 
 
 class VacationDialog(QDialog):
@@ -628,12 +472,11 @@ class VacationDialog(QDialog):
         self.db = parent.db if parent else None
         self.setWindowTitle("Добавление отпуска")
         self.setModal(True)
-        self.setFixedSize(400, 250)
+        self.setFixedSize(400, 200)
         self.init_ui()
     
     def init_ui(self):
         layout = QVBoxLayout()
-        
         form_layout = QFormLayout()
         
         self.start_date = QDateEdit()
@@ -653,7 +496,6 @@ class VacationDialog(QDialog):
         
         layout.addLayout(form_layout)
         
-        # Кнопки
         buttons_layout = QHBoxLayout()
         save_btn = QPushButton("Сохранить")
         save_btn.clicked.connect(self.save_vacation)
@@ -679,15 +521,14 @@ class VacationDialog(QDialog):
                 self.end_date.date().toString("yyyy-MM-dd"),
                 self.vacation_type.currentText()
             )
-            
             QMessageBox.information(self, "Успех", "Отпуск добавлен!")
             self.accept()
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось добавить отпуск:\n{str(e)}")
+            QMessageBox.critical(self, "Ошибка", f"Ошибка: {str(e)}")
 
 
 class HRApp(QMainWindow):
-    """Главное окно приложения кадрового учета"""
+    """Главное окно приложения"""
     
     def __init__(self, db):
         super().__init__()
@@ -696,40 +537,37 @@ class HRApp(QMainWindow):
         self.load_employees()
     
     def init_ui(self):
-        self.setWindowTitle("Система кадрового учета (MySQL)")
+        self.setWindowTitle("Система кадрового учета")
         self.setGeometry(100, 100, 1300, 700)
         
-        # Центральный виджет
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
-        # Основной layout
         main_layout = QVBoxLayout(central_widget)
         
-        # Верхняя панель с кнопками
+        # Верхняя панель
         top_panel = QHBoxLayout()
         
-        self.add_btn = QPushButton("➕ Добавить сотрудника")
+        self.add_btn = QPushButton(" Добавить")
         self.add_btn.clicked.connect(self.add_employee)
         
-        self.edit_btn = QPushButton("✏️ Редактировать")
+        self.edit_btn = QPushButton(" Редактировать")
         self.edit_btn.clicked.connect(self.edit_employee)
         
-        self.delete_btn = QPushButton("🗑️ Удалить")
+        self.delete_btn = QPushButton(" Удалить")
         self.delete_btn.clicked.connect(self.delete_employee)
         
-        self.vacation_btn = QPushButton("🏖️ Добавить отпуск")
+        self.vacation_btn = QPushButton(" Отпуск")
         self.vacation_btn.clicked.connect(self.add_vacation)
         
-        self.refresh_btn = QPushButton("🔄 Обновить")
+        self.refresh_btn = QPushButton(" Обновить")
         self.refresh_btn.clicked.connect(self.load_employees)
         
-        self.stats_btn = QPushButton("📊 Статистика")
+        self.stats_btn = QPushButton(" Статистика")
         self.stats_btn.clicked.connect(self.show_statistics)
         
         # Поиск
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Поиск сотрудников...")
+        self.search_edit.setPlaceholderText("Поиск...")
         self.search_edit.textChanged.connect(self.search_employees)
         
         top_panel.addWidget(self.add_btn)
@@ -739,106 +577,35 @@ class HRApp(QMainWindow):
         top_panel.addWidget(self.refresh_btn)
         top_panel.addWidget(self.stats_btn)
         top_panel.addStretch()
-        top_panel.addWidget(QLabel("🔍 Поиск:"))
+        top_panel.addWidget(QLabel("🔍:"))
         top_panel.addWidget(self.search_edit)
         
         main_layout.addLayout(top_panel)
         
-        # Таблица сотрудников
+        # Таблица
         self.table = QTableWidget()
-        self.table.setColumnCount(10)
+        self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels([
-            "ID", "Фамилия", "Имя", "Отчество", "Должность",
-            "Отдел", "Телефон", "Email", "Дата приема", "Статус"
+            "ID", "Фамилия", "Имя", "Должность", "Отдел", "Телефон", "Email", "Дата приема", "Статус"
         ])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.doubleClicked.connect(self.view_employee_details)
+        self.table.doubleClicked.connect(self.view_details)
         
         main_layout.addWidget(self.table)
         
-        # Нижняя панель с информацией
+        # Нижняя панель
         info_panel = QHBoxLayout()
-        self.status_label = QLabel("Готов к работе")
+        self.status_label = QLabel("Готов")
         info_panel.addWidget(self.status_label)
         info_panel.addStretch()
-        
-        # Кнопка обновления статистики
-        self.update_stats_btn = QPushButton("Обновить статистику")
-        self.update_stats_btn.clicked.connect(self.update_status_stats)
-        info_panel.addWidget(self.update_stats_btn)
-        
         main_layout.addLayout(info_panel)
         
-        # Применяем стилизацию
-        self.apply_styles()
-        
-        # Обновляем статистику в статусе
         self.update_status_stats()
     
-    def apply_styles(self):
-        """Применение стилей к интерфейсу"""
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f5f5;
-            }
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-            QTableWidget {
-                background-color: white;
-                alternate-background-color: #f9f9f9;
-                gridline-color: #e0e0e0;
-            }
-            QHeaderView::section {
-                background-color: #f0f0f0;
-                padding: 8px;
-                border: 1px solid #e0e0e0;
-                font-weight: bold;
-            }
-            QLineEdit {
-                padding: 6px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-size: 12px;
-            }
-            QLineEdit:focus {
-                border-color: #4CAF50;
-            }
-            QComboBox {
-                padding: 6px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                min-width: 150px;
-            }
-            QDateEdit {
-                padding: 6px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-            }
-            QDialog {
-                background-color: white;
-            }
-            QLabel {
-                font-size: 12px;
-            }
-        """)
-    
     def load_employees(self):
-        """Загрузка списка сотрудников в таблицу"""
+        """Загрузка сотрудников"""
         try:
             employees = self.db.get_employees()
             self.table.setRowCount(len(employees))
@@ -854,17 +621,16 @@ class HRApp(QMainWindow):
                 self.table.setItem(row, 0, QTableWidgetItem(str(emp[0])))
                 self.table.setItem(row, 1, QTableWidgetItem(emp[1]))
                 self.table.setItem(row, 2, QTableWidgetItem(emp[2]))
-                self.table.setItem(row, 3, QTableWidgetItem(emp[3] or ""))
-                self.table.setItem(row, 4, QTableWidgetItem(emp[5] or ""))
-                self.table.setItem(row, 5, QTableWidgetItem(emp[6] or ""))
-                self.table.setItem(row, 6, QTableWidgetItem(emp[7] or ""))
-                self.table.setItem(row, 7, QTableWidgetItem(emp[8] or ""))
-                self.table.setItem(row, 8, QTableWidgetItem(str(emp[9]) if emp[9] else ""))
+                self.table.setItem(row, 3, QTableWidgetItem(emp[5] or ""))
+                self.table.setItem(row, 4, QTableWidgetItem(emp[6] or ""))
+                self.table.setItem(row, 5, QTableWidgetItem(emp[7] or ""))
+                self.table.setItem(row, 6, QTableWidgetItem(emp[8] or ""))
+                self.table.setItem(row, 7, QTableWidgetItem(str(emp[9]) if emp[9] else ""))
                 
                 status_text = status_translation.get(emp[11], emp[11])
                 status_item = QTableWidgetItem(status_text)
                 
-                # Цветовая индикация статуса
+                # Цвет статуса
                 if emp[11] == "fired":
                     status_item.setForeground(QColor(255, 0, 0))
                 elif emp[11] == "on_vacation":
@@ -874,108 +640,91 @@ class HRApp(QMainWindow):
                 elif emp[11] == "active":
                     status_item.setForeground(QColor(0, 128, 0))
                 
-                self.table.setItem(row, 9, status_item)
+                self.table.setItem(row, 8, status_item)
             
             self.table.resizeColumnsToContents()
-            
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить данные:\n{str(e)}")
+            QMessageBox.critical(self, "Ошибка", f"Ошибка загрузки: {str(e)}")
     
     def search_employees(self):
         """Поиск сотрудников"""
         search_text = self.search_edit.text()
-        if search_text:
-            filters = {'search': search_text}
-            try:
-                employees = self.db.get_employees(filters)
+        try:
+            employees = self.db.get_employees(search_text if search_text else None)
+            self.table.setRowCount(len(employees))
+            
+            status_translation = {
+                "active": "Активен",
+                "on_vacation": "В отпуске",
+                "sick_leave": "На больничном",
+                "fired": "Уволен"
+            }
+            
+            for row, emp in enumerate(employees):
+                self.table.setItem(row, 0, QTableWidgetItem(str(emp[0])))
+                self.table.setItem(row, 1, QTableWidgetItem(emp[1]))
+                self.table.setItem(row, 2, QTableWidgetItem(emp[2]))
+                self.table.setItem(row, 3, QTableWidgetItem(emp[5] or ""))
+                self.table.setItem(row, 4, QTableWidgetItem(emp[6] or ""))
+                self.table.setItem(row, 5, QTableWidgetItem(emp[7] or ""))
+                self.table.setItem(row, 6, QTableWidgetItem(emp[8] or ""))
+                self.table.setItem(row, 7, QTableWidgetItem(str(emp[9]) if emp[9] else ""))
                 
-                self.table.setRowCount(len(employees))
-                status_translation = {
-                    "active": "Активен",
-                    "on_vacation": "В отпуске",
-                    "sick_leave": "На больничном",
-                    "fired": "Уволен"
-                }
-                
-                for row, emp in enumerate(employees):
-                    self.table.setItem(row, 0, QTableWidgetItem(str(emp[0])))
-                    self.table.setItem(row, 1, QTableWidgetItem(emp[1]))
-                    self.table.setItem(row, 2, QTableWidgetItem(emp[2]))
-                    self.table.setItem(row, 3, QTableWidgetItem(emp[3] or ""))
-                    self.table.setItem(row, 4, QTableWidgetItem(emp[5] or ""))
-                    self.table.setItem(row, 5, QTableWidgetItem(emp[6] or ""))
-                    self.table.setItem(row, 6, QTableWidgetItem(emp[7] or ""))
-                    self.table.setItem(row, 7, QTableWidgetItem(emp[8] or ""))
-                    self.table.setItem(row, 8, QTableWidgetItem(str(emp[9]) if emp[9] else ""))
-                    
-                    status_text = status_translation.get(emp[11], emp[11])
-                    self.table.setItem(row, 9, QTableWidgetItem(status_text))
-                    
-            except Exception as e:
-                QMessageBox.critical(self, "Ошибка", f"Ошибка при поиске:\n{str(e)}")
-        else:
-            self.load_employees()
+                status_text = status_translation.get(emp[11], emp[11])
+                self.table.setItem(row, 8, QTableWidgetItem(status_text))
+        except Exception as e:
+            pass
     
     def add_employee(self):
-        """Добавление нового сотрудника"""
         dialog = EmployeeDialog(self)
         if dialog.exec():
             self.load_employees()
             self.update_status_stats()
     
     def edit_employee(self):
-        """Редактирование выбранного сотрудника"""
-        current_row = self.table.currentRow()
-        if current_row < 0:
-            QMessageBox.warning(self, "Ошибка", "Выберите сотрудника для редактирования!")
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "Ошибка", "Выберите сотрудника!")
             return
-        
-        employee_id = int(self.table.item(current_row, 0).text())
+        employee_id = int(self.table.item(row, 0).text())
         dialog = EmployeeDialog(self, employee_id)
         if dialog.exec():
             self.load_employees()
             self.update_status_stats()
     
     def delete_employee(self):
-        """Удаление сотрудника"""
-        current_row = self.table.currentRow()
-        if current_row < 0:
-            QMessageBox.warning(self, "Ошибка", "Выберите сотрудника для удаления!")
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "Ошибка", "Выберите сотрудника!")
             return
         
-        employee_id = int(self.table.item(current_row, 0).text())
-        employee_name = f"{self.table.item(current_row, 1).text()} {self.table.item(current_row, 2).text()}"
+        employee_id = int(self.table.item(row, 0).text())
+        name = f"{self.table.item(row, 1).text()} {self.table.item(row, 2).text()}"
         
-        reply = QMessageBox.question(
-            self, "Подтверждение удаления",
-            f"Вы уверены, что хотите удалить сотрудника {employee_name}?",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        reply = QMessageBox.question(self, "Удаление", f"Удалить {name}?",
+                                     QMessageBox.Yes | QMessageBox.No)
         
         if reply == QMessageBox.Yes:
             try:
                 self.db.delete_employee(employee_id)
                 self.load_employees()
                 self.update_status_stats()
-                QMessageBox.information(self, "Успех", "Сотрудник удален!")
             except Exception as e:
-                QMessageBox.critical(self, "Ошибка", f"Не удалось удалить сотрудника:\n{str(e)}")
+                QMessageBox.critical(self, "Ошибка", f"Ошибка удаления: {str(e)}")
     
     def add_vacation(self):
-        """Добавление отпуска для сотрудника"""
-        current_row = self.table.currentRow()
-        if current_row < 0:
-            QMessageBox.warning(self, "Ошибка", "Выберите сотрудника для добавления отпуска!")
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "Ошибка", "Выберите сотрудника!")
             return
-        
-        employee_id = int(self.table.item(current_row, 0).text())
+        employee_id = int(self.table.item(row, 0).text())
         dialog = VacationDialog(self, employee_id)
         if dialog.exec():
             self.load_employees()
             self.update_status_stats()
     
-    def view_employee_details(self, index):
-        """Просмотр подробной информации о сотруднике"""
+    def view_details(self, index):
+        """Просмотр деталей"""
         row = index.row()
         employee_id = int(self.table.item(row, 0).text())
         employee = self.db.get_employee_by_id(employee_id)
@@ -983,22 +732,18 @@ class HRApp(QMainWindow):
         if not employee:
             return
         
-        # Создаем диалог с подробной информацией
-        details_dialog = QDialog(self)
-        details_dialog.setWindowTitle(f"Информация о сотруднике - {employee[1]} {employee[2]}")
-        details_dialog.setMinimumWidth(600)
-        details_dialog.setMinimumHeight(500)
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Информация - {employee[1]} {employee[2]}")
+        dialog.setMinimumWidth(500)
         
         layout = QVBoxLayout()
-        
-        # Создаем вкладки
         tabs = QTabWidget()
         
-        # Вкладка "Основная информация"
+        # Основная информация
         basic_tab = QWidget()
         basic_layout = QFormLayout(basic_tab)
         
-        info_data = [
+        info = [
             ("Фамилия:", employee[1]),
             ("Имя:", employee[2]),
             ("Отчество:", employee[3] or "—"),
@@ -1011,119 +756,92 @@ class HRApp(QMainWindow):
             ("Зарплата:", f"{employee[10]:,.2f} ₽" if employee[10] else "—"),
         ]
         
-        for label, value in info_data:
-            label_widget = QLabel(label)
-            label_widget.setStyleSheet("font-weight: bold;")
-            value_widget = QLabel(str(value))
-            value_widget.setWordWrap(True)
-            basic_layout.addRow(label_widget, value_widget)
+        for label, value in info:
+            lbl = QLabel(label)
+            lbl.setStyleSheet("font-weight: bold;")
+            basic_layout.addRow(lbl, QLabel(str(value)))
         
         tabs.addTab(basic_tab, "Основная информация")
         
-        # Вкладка "Отпуска"
+        # Отпуска
         vacation_tab = QWidget()
         vacation_layout = QVBoxLayout(vacation_tab)
-        
         vacation_table = QTableWidget()
         vacation_table.setColumnCount(4)
-        vacation_table.setHorizontalHeaderLabels(["Дата начала", "Дата окончания", "Тип", "Статус"])
+        vacation_table.setHorizontalHeaderLabels(["Начало", "Окончание", "Тип", "Статус"])
         
         try:
             vacations = self.db.get_employee_vacations(employee_id)
             vacation_table.setRowCount(len(vacations))
-            
-            for row, vac in enumerate(vacations):
-                vacation_table.setItem(row, 0, QTableWidgetItem(str(vac[2])))
-                vacation_table.setItem(row, 1, QTableWidgetItem(str(vac[3])))
-                vacation_table.setItem(row, 2, QTableWidgetItem(vac[4]))
-                vacation_table.setItem(row, 3, QTableWidgetItem(vac[5]))
+            for r, vac in enumerate(vacations):
+                vacation_table.setItem(r, 0, QTableWidgetItem(str(vac[2])))
+                vacation_table.setItem(r, 1, QTableWidgetItem(str(vac[3])))
+                vacation_table.setItem(r, 2, QTableWidgetItem(vac[4]))
+                vacation_table.setItem(r, 3, QTableWidgetItem(vac[5]))
         except Exception as e:
             vacation_table.setRowCount(1)
-            vacation_table.setItem(0, 0, QTableWidgetItem("Ошибка загрузки данных"))
+            vacation_table.setItem(0, 0, QTableWidgetItem("Нет данных"))
         
-        vacation_table.horizontalHeader().setStretchLastSection(True)
         vacation_layout.addWidget(vacation_table)
-        
         tabs.addTab(vacation_tab, "Отпуска")
         
         layout.addWidget(tabs)
         
-        # Кнопка закрытия
         close_btn = QPushButton("Закрыть")
-        close_btn.clicked.connect(details_dialog.accept)
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                padding: 8px 16px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
+        close_btn.clicked.connect(dialog.accept)
         layout.addWidget(close_btn)
         
-        details_dialog.setLayout(layout)
-        details_dialog.exec()
+        dialog.setLayout(layout)
+        dialog.exec()
     
     def show_statistics(self):
         """Показ статистики"""
         try:
             stats = self.db.get_statistics()
-            
-            stats_dialog = QDialog(self)
-            stats_dialog.setWindowTitle("Статистика сотрудников")
-            stats_dialog.setMinimumSize(400, 300)
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Статистика")
+            dialog.setMinimumSize(350, 250)
             
             layout = QVBoxLayout()
-            
-            # Заголовок
-            title = QLabel("📊 Статистика сотрудников")
-            title.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 20px;")
+            title = QLabel(" Статистика сотрудников")
+            title.setStyleSheet("font-size: 16px; font-weight: bold;")
             title.setAlignment(Qt.AlignCenter)
             layout.addWidget(title)
             
-            # Статистика
-            stats_group = QGroupBox("Общая информация")
-            stats_layout = QFormLayout()
+            group = QGroupBox()
+            form = QFormLayout()
+            form.addRow(" Всего:", QLabel(str(stats['total'])))
+            form.addRow(" Активных:", QLabel(str(stats['active'])))
+            form.addRow(" В отпуске:", QLabel(str(stats['on_vacation'])))
+            form.addRow(" На больничном:", QLabel(str(stats['sick_leave'])))
+            form.addRow(" Уволенных:", QLabel(str(stats['fired'])))
+            group.setLayout(form)
+            layout.addWidget(group)
             
-            stats_layout.addRow("👥 Всего сотрудников:", QLabel(str(stats['total'])))
-            stats_layout.addRow("🟢 Активных:", QLabel(str(stats['active'])))
-            stats_layout.addRow("🔵 В отпуске:", QLabel(str(stats['on_vacation'])))
-            stats_layout.addRow("🟠 На больничном:", QLabel(str(stats['sick_leave'])))
-            stats_layout.addRow("🔴 Уволенных:", QLabel(str(stats['fired'])))
+            btn = QPushButton("Закрыть")
+            btn.clicked.connect(dialog.accept)
+            layout.addWidget(btn)
             
-            stats_group.setLayout(stats_layout)
-            layout.addWidget(stats_group)
-            
-            # Кнопка закрытия
-            close_btn = QPushButton("Закрыть")
-            close_btn.clicked.connect(stats_dialog.accept)
-            layout.addWidget(close_btn)
-            
-            stats_dialog.setLayout(layout)
-            stats_dialog.exec()
-            
+            dialog.setLayout(layout)
+            dialog.exec()
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить статистику:\n{str(e)}")
+            QMessageBox.critical(self, "Ошибка", f"Ошибка: {str(e)}")
     
     def update_status_stats(self):
-        """Обновление статистики в строке статуса"""
+        """Обновление статуса"""
         try:
             stats = self.db.get_statistics()
             self.status_label.setText(
-                f"📊 Всего: {stats['total']} | "
-                f"🟢 Активны: {stats['active']} | "
-                f"🔵 В отпуске: {stats['on_vacation']} | "
-                f"🟠 На больничном: {stats['sick_leave']} | "
-                f"🔴 Уволены: {stats['fired']}"
+                f" Всего: {stats['total']} | "
+                f"Активны: {stats['active']} | "
+                f"В отпуске: {stats['on_vacation']} | "
+                f"На больничном: {stats['sick_leave']} | "
+                f"Уволены: {stats['fired']}"
             )
         except Exception as e:
-            self.status_label.setText("Ошибка загрузки статистики")
+            self.status_label.setText("Ошибка статистики")
     
     def closeEvent(self, event):
-        """Закрытие соединения с БД при закрытии приложения"""
         self.db.close()
         event.accept()
 
@@ -1132,22 +850,14 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     
-    # Показываем диалог настроек подключения
-    conn_dialog = ConnectionDialog()
-    
-    if conn_dialog.exec() == QDialog.Accepted:
-        params = conn_dialog.get_connection_params()
-        
-        try:
-            db = Database(**params)
-            window = HRApp(db)
-            window.show()
-            sys.exit(app.exec())
-        except Exception as e:
-            QMessageBox.critical(None, "Ошибка", f"Не удалось подключиться к базе данных:\n{str(e)}")
-            sys.exit(1)
-    else:
-        sys.exit(0)
+    try:
+        db = Database()
+        window = HRApp(db)
+        window.show()
+        sys.exit(app.exec())
+    except Exception as e:
+        QMessageBox.critical(None, "Ошибка", f"Не удалось запустить приложение:\n{str(e)}")
+        sys.exit(1)
 
 
 if __name__ == '__main__':
