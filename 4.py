@@ -1534,7 +1534,7 @@ class EmployeeDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Ошибка базы данных", 
-                               f"❌ Не удалось сохранить данные:\n{str(e)}")
+                               f" Не удалось сохранить данные:\n{str(e)}")
 
 
 class VacationDialog(QDialog):
@@ -2079,7 +2079,7 @@ class HRApp(QMainWindow):
             return
         
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"👤 Информация - {employee[1]} {employee[2]}")
+        dialog.setWindowTitle(f" Информация - {employee[1]} {employee[2]}")
         dialog.setMinimumWidth(500)
         dialog.setStyleSheet("""
             QDialog {
@@ -2258,7 +2258,7 @@ class HRApp(QMainWindow):
             """)
             
             layout = QVBoxLayout()
-            title = QLabel("📊 Статистика сотрудников")
+            title = QLabel(" Статистика сотрудников")
             title.setStyleSheet("font-size: 18px; font-weight: bold; color: #0078D7; padding: 10px;")
             title.setAlignment(Qt.AlignCenter)
             layout.addWidget(title)
@@ -2316,7 +2316,7 @@ class HRApp(QMainWindow):
 
             
             self.status_label.setText(
-                f"👤 {self.current_user['full_name']} | "
+                f" {self.current_user['full_name']} | "
                 f"Отображается: {visible_rows}{filter_text}{update_text} | "
                 f"Всего: {stats['total']} | "
                 f"Активны: {stats['active']} | "
@@ -2371,7 +2371,7 @@ def main():
         sys.exit(app.exec())
     except Exception as e:
         QMessageBox.critical(None, "Критическая ошибка", 
-                           f"❌ Не удалось запустить приложение:\n{str(e)}")
+                           f" Не удалось запустить приложение:\n{str(e)}")
         sys.exit(1)
 
 
