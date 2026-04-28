@@ -408,7 +408,6 @@ class Database:
 
 class PDFGenerator:
     """Класс для генерации PDF документов"""
-    
     @staticmethod
     def generate_employee_report(employee, vacations=None):
         buffer = BytesIO()
@@ -606,7 +605,7 @@ class LoginDialog(QDialog):
     def init_ui(self):
         layout = QVBoxLayout()
         
-        title = QLabel("🔐 Вход в систему")
+        title = QLabel(" Вход в систему")
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px; color: #0078D7;")
         layout.addWidget(title)
@@ -1269,7 +1268,7 @@ class EmployeeDialog(QDialog):
         layout.addLayout(form_layout)
         
         buttons_layout = QHBoxLayout()
-        save_btn = QPushButton("💾 Сохранить")
+        save_btn = QPushButton(" Сохранить")
         save_btn.clicked.connect(self.save_employee)
         save_btn.setStyleSheet("""
             QPushButton {
@@ -1528,10 +1527,10 @@ class EmployeeDialog(QDialog):
         try:
             if self.employee_id:
                 self.db.update_employee(self.employee_id, data)
-                QMessageBox.information(self, "Успех", "✅ Данные сотрудника обновлены!")
+                QMessageBox.information(self, "Успех", " Данные сотрудника обновлены!")
             else:
                 self.db.add_employee(data)
-                QMessageBox.information(self, "Успех", "✅ Новый сотрудник добавлен!")
+                QMessageBox.information(self, "Успех", " Новый сотрудник добавлен!")
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Ошибка базы данных", 
@@ -1543,7 +1542,7 @@ class VacationDialog(QDialog):
         super().__init__(parent)
         self.employee_id = employee_id
         self.db = parent.db if parent else None
-        self.setWindowTitle("🏖️ Добавление отпуска")
+        self.setWindowTitle(" Добавление отпуска")
         self.setModal(True)
         self.setFixedSize(400, 250)
         self.setStyleSheet("""
@@ -1604,7 +1603,7 @@ class VacationDialog(QDialog):
         layout.addSpacing(20)
         
         buttons_layout = QHBoxLayout()
-        save_btn = QPushButton("💾 Сохранить")
+        save_btn = QPushButton(" Сохранить")
         save_btn.clicked.connect(self.save_vacation)
         save_btn.setStyleSheet("""
             QPushButton {
@@ -1675,10 +1674,10 @@ class VacationDialog(QDialog):
                 self.end_date.date().toString("yyyy-MM-dd"),
                 self.vacation_type.currentText()
             )
-            QMessageBox.information(self, "Успех", "✅ Отпуск добавлен!")
+            QMessageBox.information(self, "Успех", " Отпуск добавлен!")
             self.accept()
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"❌ Ошибка при добавлении отпуска:\n{str(e)}")
+            QMessageBox.critical(self, "Ошибка", f" Ошибка при добавлении отпуска:\n{str(e)}")
 
 
 class HRApp(QMainWindow):
@@ -1771,29 +1770,29 @@ class HRApp(QMainWindow):
         
         top_panel = QHBoxLayout()
         
-        self.add_btn = QPushButton("➕ Добавить")
+        self.add_btn = QPushButton(" Добавить")
         self.add_btn.clicked.connect(self.add_employee)
         
-        self.edit_btn = QPushButton("✏️ Редактировать")
+        self.edit_btn = QPushButton(" Редактировать")
         self.edit_btn.clicked.connect(self.edit_employee)
         
-        self.delete_btn = QPushButton("🗑️ Удалить")
+        self.delete_btn = QPushButton(" Удалить")
         self.delete_btn.clicked.connect(self.delete_employee)
         
-        self.vacation_btn = QPushButton("🏖️ Отпуск")
+        self.vacation_btn = QPushButton(" Отпуск")
         self.vacation_btn.clicked.connect(self.add_vacation)
         
-        self.refresh_btn = QPushButton("🔄 Обновить")
+        self.refresh_btn = QPushButton(" Обновить")
         self.refresh_btn.clicked.connect(self.load_employees)
         
-        self.stats_btn = QPushButton("📊 Статистика")
+        self.stats_btn = QPushButton(" Статистика")
         self.stats_btn.clicked.connect(self.show_statistics)
         
-        self.filter_toggle_btn = QPushButton("🔍 Фильтры")
+        self.filter_toggle_btn = QPushButton(" Фильтры")
         self.filter_toggle_btn.setCheckable(True)
         self.filter_toggle_btn.clicked.connect(self.toggle_filters)
         
-        self.pdf_report_btn = QPushButton("📄 PDF отчет")
+        self.pdf_report_btn = QPushButton(" PDF отчет")
         self.pdf_report_btn.clicked.connect(self.generate_pdf_report)
         
         top_panel.addWidget(self.add_btn)
@@ -1846,7 +1845,7 @@ class HRApp(QMainWindow):
         self.filter_visible = self.filter_widget.toggle_visibility()
         
         if self.filter_visible:
-            self.filter_toggle_btn.setText("🔍 Скрыть фильтры")
+            self.filter_toggle_btn.setText(" Скрыть фильтры")
             self.filter_toggle_btn.setChecked(True)
             self.filter_toggle_btn.setStyleSheet("""
                 QPushButton {
@@ -1859,7 +1858,7 @@ class HRApp(QMainWindow):
                 }
             """)
         else:
-            self.filter_toggle_btn.setText("🔍 Фильтры")
+            self.filter_toggle_btn.setText(" Фильтры")
             self.filter_toggle_btn.setChecked(False)
             self.filter_toggle_btn.setStyleSheet("""
                 QPushButton {
@@ -1901,10 +1900,10 @@ class HRApp(QMainWindow):
                     f.write(pdf_data)
                 
                 QMessageBox.information(self, "Успех", 
-                    f"✅ PDF отчет сохранен в {file_name}")
+                    f" PDF отчет сохранен в {file_name}")
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", 
-                    f"❌ Ошибка создания PDF: {str(e)}")
+                    f" Ошибка создания PDF: {str(e)}")
     
     def load_employees(self):
         try:
@@ -1992,19 +1991,19 @@ class HRApp(QMainWindow):
             }
         """)
         
-        view_action = QAction("👁️ Просмотреть", self)
+        view_action = QAction(" Просмотреть", self)
         view_action.triggered.connect(self.view_details_current)
         
-        edit_action = QAction("✏️ Редактировать", self)
+        edit_action = QAction(" Редактировать", self)
         edit_action.triggered.connect(self.edit_employee)
         
-        vacation_action = QAction("🏖️ Добавить отпуск", self)
+        vacation_action = QAction(" Добавить отпуск", self)
         vacation_action.triggered.connect(self.add_vacation)
         
-        pdf_action = QAction("📄 PDF отчет", self)
+        pdf_action = QAction(" PDF отчет", self)
         pdf_action.triggered.connect(self.generate_pdf_report)
         
-        delete_action = QAction("🗑️ Удалить", self)
+        delete_action = QAction(" Удалить", self)
         delete_action.triggered.connect(self.delete_employee)
         
         menu.addAction(view_action)
@@ -2049,7 +2048,7 @@ class HRApp(QMainWindow):
         employee_id = int(self.table.item(row, 0).text())
         name = f"{self.table.item(row, 1).text()} {self.table.item(row, 2).text()}"
         
-        reply = QMessageBox.question(self, "Удаление", f"❓ Удалить {name}?",
+        reply = QMessageBox.question(self, "Удаление", f"? Удалить {name}?",
                                      QMessageBox.Yes | QMessageBox.No)
         
         if reply == QMessageBox.Yes:
@@ -2059,7 +2058,7 @@ class HRApp(QMainWindow):
                 self.filter_widget.load_departments()
                 self.filter_widget.load_positions()
             except Exception as e:
-                QMessageBox.critical(self, "Ошибка", f"❌ Ошибка удаления: {str(e)}")
+                QMessageBox.critical(self, "Ошибка", f" Ошибка удаления: {str(e)}")
     
     def add_vacation(self):
         row = self.table.currentRow()
@@ -2171,13 +2170,13 @@ class HRApp(QMainWindow):
             vacation_table.setItem(0, 0, QTableWidgetItem("Нет данных"))
         
         vacation_layout.addWidget(vacation_table)
-        tabs.addTab(vacation_tab, "🏖️ Отпуска")
+        tabs.addTab(vacation_tab, " Отпуска")
         
         layout.addWidget(tabs)
         
         buttons_layout = QHBoxLayout()
         
-        pdf_btn = QPushButton("📄 Сохранить PDF")
+        pdf_btn = QPushButton(" Сохранить PDF")
         pdf_btn.clicked.connect(lambda: self.save_employee_pdf(employee, vacations, dialog))
         pdf_btn.setStyleSheet("""
             QPushButton {
@@ -2229,16 +2228,16 @@ class HRApp(QMainWindow):
                     f.write(pdf_data)
                 
                 QMessageBox.information(parent_dialog, "Успех", 
-                    f"✅ PDF отчет сохранен в {file_name}")
+                    f" PDF отчет сохранен в {file_name}")
             except Exception as e:
                 QMessageBox.critical(parent_dialog, "Ошибка", 
-                    f"❌ Ошибка создания PDF: {str(e)}")
+                    f" Ошибка создания PDF: {str(e)}")
     
     def show_statistics(self):
         try:
             stats = self.db.get_statistics()
             dialog = QDialog(self)
-            dialog.setWindowTitle("📊 Статистика")
+            dialog.setWindowTitle(" Статистика")
             dialog.setMinimumSize(400, 300)
             dialog.setStyleSheet("""
                 QDialog {
@@ -2306,14 +2305,14 @@ class HRApp(QMainWindow):
             dialog.setLayout(layout)
             dialog.exec()
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"❌ Ошибка: {str(e)}")
+            QMessageBox.critical(self, "Ошибка", f" Ошибка: {str(e)}")
     
     def update_status_stats(self):
         try:
             stats = self.db.get_statistics()
             visible_rows = self.table.rowCount()
             
-            filter_text = " | 🔍 Фильтры активны" if self.filter_visible else ""
+            filter_text = " |  Фильтры активны" if self.filter_visible else ""
 
             
             self.status_label.setText(
@@ -2337,7 +2336,6 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     
-    # Тёмная тема для всех элементов
     app.setStyleSheet("""
         QToolTip {
             background-color: #2d2d2d;
